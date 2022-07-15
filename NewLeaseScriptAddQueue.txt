@@ -1,0 +1,50 @@
+# DHCP Lease to Simple Queues
+# 2022 Fernando Dipp (fernando.dipp@gmail.com)
+#
+# This script helps to add/set automaticaly a queue
+# as new hosts connects to the network
+#
+# Mikrotik RouterOS v7.3.1
+
+#DHCP SERVER PUBLIC LEASE SCRIPT#
+:if ([$leaseBound]=1) do={
+   :local leaseaddr([$leaseActIP]."/32")
+   :local leasemacaddr [$leaseActMAC]
+   :local leasehostname [$"lease-hostname"]
+   :local queuecomment("DMH-" . $leasemacaddr . "-" . $leasehostname)
+   :local cmd "/queue simple add target=$leaseaddr comment=$queuecomment name=$queuecomment max-limit=20M/10M queue=wireless-default/wireless-default priority=1/1"
+   :log info "Declared variables"
+   :local leaseinqueue false
+   
+   /queue simple
+   :foreach and in=[find target~"$leaseaddr"] do={
+      :set leaseinqueue true
+   }
+   
+   :if ($leaseinqueue = false) do={
+      :run $cmd
+      :delay 500ms
+   }
+   
+   :if ($leaseinqueue = true) do={
+      /queue simple
+      :foreach and in=[find target~"$leaseaddr"] do={
+         :local livecomment [get $y comment]
+         :local livetarget [get $y target]
+         :local livename [get $y name]
+         :if ($livetarget = $leaseaddr) do={
+            :log info "First if - There is already a queue with the same IP as the lease"
+               :if ($livename = $queuecomment) do={
+                  :log info "Second if - Queue already created for the same host"
+                     :log info "DHCP Server Publish: Lease renewed, no change in queues"
+               } else={
+                  :log info "First else - There is already a queue with the same IP as the lease, but with different name and comment"
+                     :log info "DHCP Server Publish: New lease, updating queue $queuecomment"
+                  reset counters $y
+                  set $y name=$queuecomment comment=$queuecomment
+                  :delay 500ms
+               }
+            }
+         }
+      }
+   }

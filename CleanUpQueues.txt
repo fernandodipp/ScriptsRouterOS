@@ -1,0 +1,22 @@
+# Cleaning Unused Queues
+# 2022 Fernando Dipp (fernando.dipp@gmail.com)
+#
+# This script helps to organize queues as hosts disconnects from network
+# by comparing the MAC addresses in the simple queue list with the
+# MAC addresses in the dhcp-server leases list
+#
+# Mikrotik RouterOS v7.3.1
+
+/queue simple
+:foreach z in=[find] do={
+   :local queuecomment [get $z comment]
+   :local queue1stpart [:pick $queuecomment 0 3]
+   :local queue2ndpart [:pick $queuecomment 4 21]
+   :if ( $queue1stpart = "DMH") do={
+      :if ( [/ip dhcp-server lease find mac-address=$queue2ndpart] = "") do={
+         :log info ("LIMPEZA DE QUEUES: Removendo queue MAC Address - " . $queue2ndpart)
+         :delay 1000ms
+         remove $z
+      }
+   }
+}
